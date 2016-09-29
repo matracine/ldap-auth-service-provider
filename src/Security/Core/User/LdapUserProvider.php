@@ -42,7 +42,17 @@ class LdapUserProvider implements UserProviderInterface
         $this->name = $name;
         $this->ldap = $ldap;
         $this->logger = $logger;
-        $defaults = array(
+        
+        // two level merging
+        $this->options = $this->getDefaultOptions();
+        foreach ($options as $key => $value) {
+            $this->options[$key] = is_array($value) ? array_merge($this->options[$key], $value) : $value;
+        }
+    }
+
+    protected function getDefaultOptions()
+    {
+        return array(
             // LDAP property used as auth name
             'authName' => 'dn',
             'attr' => array(
@@ -56,11 +66,6 @@ class LdapUserProvider implements UserProviderInterface
             'filter' => '(&(objectClass=user)(sAMAccountName=%s))',
             'baseDn' => null,
         );
-        // two level merging
-        $this->options = $defaults;
-        foreach ($options as $key => $value) {
-            $this->options[$key] = is_array($value) ? array_merge($this->options[$key], $value) : $value;
-        }
     }
 
     /**
@@ -85,15 +90,8 @@ class LdapUserProvider implements UserProviderInterface
 
         // create user
         $userClass = $this->options['class'];
-        $roles = array();
-        if (array_key_exists('memberof', $userData) && array_key_exists('roles', $this->options)) {
-            foreach ($this->options['roles'] as $group => $role) {
-                if (in_array($group, $userData['memberof'])) {
-                    $roles[] = $role;
-                }
-            }
-        }
 
+        $roles = $this->initRoles($userData);
         $user = new $userClass($username, null, array_unique($roles));
 
         // map auth name
@@ -115,6 +113,22 @@ class LdapUserProvider implements UserProviderInterface
         }
 
         return $user;
+    }
+
+    /**
+     * {inheritDoc}.
+     */
+    protected function initRoles($userData)
+    {
+        $roles = array();
+        if (array_key_exists('memberof', $userData) && array_key_exists('roles', $this->options)) {
+            foreach ($this->options['roles'] as $group => $role) {
+                if (in_array($group, $userData['memberof'])) {
+                    $roles[] = $role;
+                }
+            }
+        }
+        return $roles;
     }
 
     /**
